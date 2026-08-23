@@ -34,10 +34,7 @@ class SystemPermissions {
             queue: nil
         ) { _ in
             BackgroundWork.permissionsCheckOnTimerQueue.addOperation {
-                if AccessibilityPermission.update() == .notGranted {
-                    Logger.error { "Accessibility permission revoked (distributed notification); restarting" }
-                    DispatchQueue.main.async { App.restart() }
-                }
+                _ = AccessibilityPermission.update()
             }
         }
     }
@@ -123,11 +120,6 @@ class AccessibilityPermission {
     }
 
     private static func detect() -> PermissionStatus {
-        let shouldPrompt = !hasPrompted
-        if shouldPrompt {
-            hasPrompted = true
-            return AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary) ? .granted : .notGranted
-        }
         return AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary) ? .granted : .notGranted
     }
 }

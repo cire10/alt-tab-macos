@@ -58,6 +58,12 @@ enum PhantomWindowDetector {
         // on the wrong app (#5849). Deliberately placed AFTER the strong signal: a wid CGS dropped from
         // every list is gone regardless of a stale focus record, and resurrecting it would undo #5714.
         if isFocused { return false }
+        // Standard application windows with a valid non-empty title are real windows,
+        // not phantoms (protects Electron/Chromium apps like Slack, VS Code, Cursor, Chrome against
+        // temporary CGS .invisible tag latency).
+        if !s.isWindowlessApp && !s.title.isEmpty {
+            return false
+        }
         // weak signal: alpha=0 / orderOut: window still on a visible Space
         return true
     }

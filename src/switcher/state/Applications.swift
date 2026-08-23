@@ -82,13 +82,17 @@ class Applications {
             var windowToSpacesMap = snapshot.windowToSpacesMap
             var backfillProbe = [String]()
             for wid in trackedWids where windowToSpacesMap[wid] == nil {
-                let spaces = CGSCallScheduler.windowSpaces(wid)
-                // What this per-window query answers for a BACKGROUNDED TAB decides whether the re-query can
-                // ever strip a group of its claim — the rec24 vanish. `sp[]` means the enumeration and the
-                // per-window query agree the tab is nowhere; a non-empty answer means the tab keeps a stale
-                // Space and the group is never wiped. Logged because the test model has to assume one.
-                backfillProbe.append("#\(wid)→\(spaces.map { "\($0)" } ?? "noAnswer")")
-                if let spaces, !spaces.isEmpty { windowToSpacesMap[wid] = spaces }
+                if let existingSpaces = (Windows.list.first { $0.cgWindowId == wid })?.spaceIds, !existingSpaces.isEmpty {
+                    windowToSpacesMap[wid] = existingSpaces
+                } else {
+                    let spaces = CGSCallScheduler.windowSpaces(wid)
+                    // What this per-window query answers for a BACKGROUNDED TAB decides whether the re-query can
+                    // ever strip a group of its claim — the rec24 vanish. `sp[]` means the enumeration and the
+                    // per-window query agree the tab is nowhere; a non-empty answer means the tab keeps a stale
+                    // Space and the group is never wiped. Logged because the test model has to assume one.
+                    backfillProbe.append("#\(wid)→\(spaces.map { "\($0)" } ?? "noAnswer")")
+                    if let spaces, !spaces.isEmpty { windowToSpacesMap[wid] = spaces }
+                }
             }
             // CORROBORATE the wids both reads left unplaced, because "no Space" is not what an empty answer
             // means. CGS returns a non-NULL EMPTY array for a wid it has no record of at all (measured on

@@ -75,12 +75,26 @@ class PermissionsWindow: NSWindow {
             )
             rows.append([Self.screenRecordingView])
         }
+        let continueButton = NSButton(title: NSLocalizedString("Continue", comment: ""), target: self, action: #selector(continueButtonClicked))
+        continueButton.bezelStyle = .rounded
+        continueButton.keyEquivalent = "\r"
+        let bottomRow = NSStackView(views: [NSView(), continueButton])
+        bottomRow.orientation = .horizontal
+        rows.append([bottomRow])
         let widestRowWidth = rows.reduce(0) { max($0, $1[0]!.fittingSize.width) }
         rows.forEach { $0[0]!.fit(widestRowWidth, $0[0]!.fittingSize.height) }
         let view = GridView(rows as! [[NSView]])
         view.fit()
         contentView = view.wrappedWithTitlebarPadding()
         setContentSize(contentView!.fittingSize)
+    }
+
+    @objc private func continueButtonClicked() {
+        if !SystemPermissions.preStartupPermissionsPassed {
+            SystemPermissions.preStartupPermissionsPassed = true
+            App.continueAppLaunchAfterPermissionsAreGranted()
+        }
+        close()
     }
 
     override func close() {
