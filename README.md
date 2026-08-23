@@ -8,9 +8,9 @@ This is a high-performance community fork of [AltTab for macOS](https://github.c
 
 ## Key Improvements in this Fork
 
-1. **⚡ ~98% Memory Reduction (~50–70 MB RAM instead of ~1.6 GB)**:
-   - Window captures are proportionally downscaled to switcher tile dimensions immediately upon capture.
-   - Full 4K/5K multi-megabyte uncompressed screen buffers are purged off-main thread, completely resolving the severe memory bloat issue.
+1. **⚡ Adaptive Thumbnail Memory Scaling**:
+   - Window screenshots are proportionally downscaled to switcher tile dimensions immediately upon capture, and raw full-resolution display buffers are discarded off-main thread.
+   - Memory usage scales with switcher UI preview dimensions rather than full native display resolution, eliminating extreme memory growth on high-density (Retina / 4K / 5K) displays.
 
 2. **🔓 All Features Unlocked**:
    - Native, permanent access to all appearance styles (**App Icons & Titles**, **Auto Size**, **Search in Switcher**, **Extra Shortcuts**, and custom appearance overrides) without paywalls or license gating.
@@ -21,7 +21,7 @@ This is a high-performance community fork of [AltTab for macOS](https://github.c
    - Replaced intrusive polling with silent preflight checks (`CGPreflightScreenCaptureAccess`).
 
 4. **🚫 Stripped Marketing & Upgrade Popovers**:
-   - Completely disabled timed trial countdowns, welcome popovers, hard-gate dialogs, and upgrade badges.
+   - Completely disabled scheduled popovers, trial timers, hard-gate dialogs, and upgrade marketing badges.
 
 ---
 
