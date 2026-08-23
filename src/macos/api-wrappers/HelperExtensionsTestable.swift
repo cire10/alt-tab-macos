@@ -75,3 +75,12 @@ extension NSWindow {
         return w >= 0 && h >= 0 && (x + w) <= hi && (y + h) <= hi // w/h non-negative, no overflow
     }
 }
+
+extension NSControl.ControlSize {
+    static var extraLarge: NSControl.ControlSize {
+        if #available(macOS 11.0, *) {
+            return NSControl.ControlSize(rawValue: 4) ?? .large
+        }
+        return .regular
+    }
+}

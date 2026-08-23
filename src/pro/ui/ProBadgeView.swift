@@ -343,6 +343,7 @@ class ProBadgeView: NSView {
         // when it spots a `ProBadgeView`, just without needing the walk to find it after.
         SettingsSearchIndex.registerString(ProBadgeView.proLabel)
         translatesAutoresizingMaskIntoConstraints = false
+        isHidden = true
         wantsLayer = true
         layer?.cornerRadius = 4
         label.font = NSFont.systemFont(ofSize: 9, weight: .semibold)

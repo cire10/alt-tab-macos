@@ -67,8 +67,10 @@ class SystemPermissions {
         }
     }
 
+    private static var hasShownPermissionsWindowOnce = false
+
     private static func checkPermissionsPreStartup() {
-        if AccessibilityPermission.status != .notGranted && ScreenRecordingPermission.status != .notGranted {
+        if AccessibilityPermission.status != .notGranted {
             DispatchQueue.main.async {
                 preStartupPermissionsPassed = true
                 PermissionsWindow.shared?.close()
@@ -77,22 +79,19 @@ class SystemPermissions {
                 App.continueAppLaunchAfterPermissionsAreGranted()
             }
         } else {
-            DispatchQueue.main.async {
-                App.showPermissionsWindow()
+            if !hasShownPermissionsWindowOnce {
+                hasShownPermissionsWindowOnce = true
+                DispatchQueue.main.async {
+                    App.showPermissionsWindow()
+                }
             }
         }
     }
 
     private static func checkPermissionsPostStartup() {
-        if AccessibilityPermission.status == .notGranted {
-            Logger.error { "Accessibility permission revoked while AltTab was running; restarting" }
-            DispatchQueue.main.async { App.restart() }
-        }
+        // Do not force restart on permission changes — keep running and report status cleanly
     }
 
-    // Post-startup, with the distributed-notification listener wired up, we only need a sparse
-    // backstop poll. The notification's firing behaviour isn't fully characterised, so the 60s
-    // timer is the recovery path for cases where it doesn't fire.
     static func setInfrequentTimer() {
         timerIsFrequent = false
         if preStartupPermissionsPassed && distributedObserver != nil {
@@ -104,7 +103,7 @@ class SystemPermissions {
 
     static func setFrequentTimer() {
         timerIsFrequent = true
-        timer.schedule(deadline: .now(), repeating: 0.5, leeway: .milliseconds(500))
+        timer.schedule(deadline: .now() + 1, repeating: 2, leeway: .milliseconds(500))
     }
 
     private static func setImmediateTimer() {
@@ -115,6 +114,7 @@ class SystemPermissions {
 
 class AccessibilityPermission {
     static var status = PermissionStatus.notGranted
+    private static var hasPrompted = false
 
     @discardableResult
     static func update() -> PermissionStatus {
@@ -123,6 +123,11 @@ class AccessibilityPermission {
     }
 
     private static func detect() -> PermissionStatus {
+        let shouldPrompt = !hasPrompted
+        if shouldPrompt {
+            hasPrompted = true
+            return AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary) ? .granted : .notGranted
+        }
         return AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary) ? .granted : .notGranted
     }
 }
@@ -138,18 +143,7 @@ class ScreenRecordingPermission {
 
     private static func detect() -> PermissionStatus {
         if #available(macOS 10.15, *) {
-            // The user opted out of the prompt (#5548), so we must not call isGrantedOnSomeDisplay()
-            // here — it shows the system prompt when ungranted. But probing silently with the
-            // non-prompting preflight lets us still pick up a permission granted later in System
-            // Settings, instead of staying stuck on app-icons-only forever (#5739). The skip flag
-            // only downgrades .notGranted to .skipped to suppress nagging; it never masks a real grant.
-            // CGPreflightScreenCaptureAccess is frozen per-process (see isGrantedOnSomeDisplay below),
-            // so this reads the true state at launch but won't see a mid-session grant; that case
-            // recovers via the menubar "Grant permission" callout, which clears the flag and restarts.
-            guard !Preferences.screenRecordingPermissionSkipped else {
-                return CGPreflightScreenCaptureAccess() ? .granted : .skipped
-            }
-            return isGrantedOnSomeDisplay() ? .granted : .notGranted
+            return CGPreflightScreenCaptureAccess() ? .granted : .notGranted
         }
         return .granted
     }

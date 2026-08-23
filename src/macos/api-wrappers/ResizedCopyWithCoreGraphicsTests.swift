@@ -97,4 +97,21 @@ final class ResizedCopyWithCoreGraphicsTests: XCTestCase {
         // Premultiplied last: layout is R G B A. Red channel should be ~255.
         XCTAssertGreaterThan(pixel[0], 200, "the resized image should still be predominantly red")
     }
+
+    func testProportionalRetinaWindowDownscaling() {
+        // Simulating a 4K 16:9 window downscaling to a thumbnail box
+        let src = makeImage(width: 3840, height: 2160)
+        let out = src.resizedCopyWithCoreGraphics(NSSize(width: 500, height: 281), true)
+        XCTAssertEqual(out.width, 500)
+        XCTAssertEqual(out.height, 281)
+        XCTAssertTrue(out.bitmapInfo.contains(.byteOrder32Little))
+    }
+
+    func testTallWindowAspectRatioPreserved() {
+        // Simulating a vertical terminal/chat window (e.g. 1000x2000) downscaled to fit max height 300
+        let src = makeImage(width: 1000, height: 2000)
+        let out = src.resizedCopyWithCoreGraphics(NSSize(width: 150, height: 300), true)
+        XCTAssertEqual(out.width, 150)
+        XCTAssertEqual(out.height, 300)
+    }
 }

@@ -167,7 +167,21 @@ class WindowCaptureScreenshots {
 }
 
 class WindowCaptureScreenshotsPrivateApi {
-    static func oneTimeScreenshots(_ eligibleWindows: [Window], _ source: RefreshCausedBy, prioritizedIds: Set<CGWindowID>? = nil) {
+    struct CaptureRequest {
+        let window: Window
+        let size: CGSize
+        let scaleFactor: CGFloat
+        let fullRes: Bool
+    }
+
+    static func oneTimeScreenshots(_ eligibleWindows: [Window], _ source: RefreshCausedBy, prioritizedIds: Set<CGWindowID>? = nil, fullRes: Bool = false) {
+        var requests = [CGWindowID: CaptureRequest]()
+        for window in eligibleWindows {
+            guard let wid = window.cgWindowId, let size = window.size else { continue }
+            let scaleFactor = WindowThumbnails.captureScaleFactor(window)
+            requests[wid] = CaptureRequest(window: window, size: size, scaleFactor: scaleFactor, fullRes: fullRes)
+        }
+        guard !requests.isEmpty else { return }
         let prioritized = prioritizedIds ?? []
         // iterate prioritized windows first so they enqueue (and grab queue slots) ahead of the rest
         let sorted = eligibleWindows.sorted { a, b in
@@ -176,16 +190,40 @@ class WindowCaptureScreenshotsPrivateApi {
             return aPri && !bPri
         }
         for window in sorted {
-            guard let wid = window.cgWindowId else { continue }
+            guard let wid = window.cgWindowId, let request = requests[wid] else { continue }
             let isPrioritized = prioritized.contains(wid)
-            Applications.screenshotThrottler.throttleOrProceed(key: "capture-wid-\(wid)", queue: BackgroundWork.screenshotsQueue, priority: isPrioritized ? .high : .normal) { [weak window] in
+            let keyPrefix = request.fullRes ? "preview" : "capture"
+            Applications.screenshotThrottler.throttleOrProceed(key: "\(keyPrefix)-wid-\(wid)", queue: BackgroundWork.screenshotsQueue, priority: isPrioritized ? .high : .normal) { [weak window = request.window] in
                 guard source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
-                guard let wid = window?.cgWindowId, let cgImage = oneTimeCapture(wid) else { return }
+                guard let window, let wid = window.cgWindowId, let rawCgImage = oneTimeCapture(wid) else { return }
                 guard source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
-                DispatchQueue.main.async { [weak window] in
-                    guard source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
-                    window?.refreshThumbnail(.cgImage(cgImage))
+                let finalImage: CGImage
+                if !request.fullRes,
+                   let targetPixelSize = WindowThumbnails.capturePixelSize(request.size, request.scaleFactor, false),
+                   targetPixelSize.width > 0, targetPixelSize.height > 0,
+                   (targetPixelSize.width < CGFloat(rawCgImage.width) || targetPixelSize.height < CGFloat(rawCgImage.height)) {
+                    finalImage = rawCgImage.resizedCopyWithCoreGraphics(targetPixelSize, true)
+                } else {
+                    finalImage = rawCgImage
                 }
+                deliver(window, source, .cgImage(finalImage), request.fullRes)
+            }
+        }
+    }
+
+    private static func deliver(_ window: Window, _ source: RefreshCausedBy, _ contents: CALayerContents, _ fullRes: Bool) {
+        guard source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
+        DispatchQueue.main.async { [weak window] in
+            guard let window, source != .refreshOnlyThumbnailsAfterShowUi || SwitcherSession.isActive else { return }
+            if fullRes {
+                guard let session = SwitcherSession.current, let wid = window.cgWindowId else { return }
+                guard !WindowThumbnails.isPartialFrame(window, contents, fullRes: true) else { return }
+                session.storePreviewFrame(wid, contents)
+                if let position = window.position, let size = window.size {
+                    PreviewPanel.updateIfShowing(wid, contents, position, size)
+                }
+            } else {
+                window.refreshThumbnail(contents)
             }
         }
     }

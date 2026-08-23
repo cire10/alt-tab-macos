@@ -182,17 +182,21 @@ enum WindowThumbnails {
     /// Fetch just-in-time full-resolution Preview frames for the selected window and its ±2 cycling
     /// neighbors (so quick Tab presses land on a sharp Preview). Frames go to the session's capped cache,
     /// not `Window.thumbnail`, and die with the session. Called on show and on every selection move; the
-    /// cache and the per-wid throttler keep re-requests cheap. No-op below macOS 26, where
-    /// CGSHWCaptureWindowList always captures full-size, so `Window.thumbnail` is already sharp.
+    /// cache and the per-wid throttler keep re-requests cheap.
     static func fetchPreviewFrames() {
-        guard #available(macOS 26.0, *), let session = SwitcherSession.current,
+        guard let session = SwitcherSession.current,
               ScreenRecordingPermission.status == .granted, !ScreenLockEvents.isScreenLocked,
               Preferences.effectivePreviewSelectedWindow(session.shortcutIndex) else { return }
         let missingIds = Windows.selectedNeighborhoodIds().filter { !session.hasPreviewFrame($0) && !restoringWids.contains($0) }
         guard !missingIds.isEmpty else { return }
         let windowsToFetch = Windows.list.filter { $0.cgWindowId.map { missingIds.contains($0) } ?? false }
         let selectedId = Windows.selectedWindow()?.cgWindowId
-        WindowCaptureScreenshots.oneTimeScreenshots(windowsToFetch, .refreshOnlyThumbnailsAfterShowUi,
-            prioritizedIds: selectedId.map { [$0] } ?? [], fullRes: true)
+        if #available(macOS 26.0, *) {
+            WindowCaptureScreenshots.oneTimeScreenshots(windowsToFetch, .refreshOnlyThumbnailsAfterShowUi,
+                prioritizedIds: selectedId.map { [$0] } ?? [], fullRes: true)
+        } else {
+            WindowCaptureScreenshotsPrivateApi.oneTimeScreenshots(windowsToFetch, .refreshOnlyThumbnailsAfterShowUi,
+                prioritizedIds: selectedId.map { [$0] } ?? [], fullRes: true)
+        }
     }
 }

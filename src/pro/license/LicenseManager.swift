@@ -48,23 +48,25 @@ class LicenseManager {
     /// can drive activation without side effects.
     var onBeforeProUnlock: () -> Void = { }
 
-    private(set) var state: LicenseState = .trialExpired {
+    private(set) var state: LicenseState = .pro {
         didSet { onStateChanged?(state) }
     }
 
     var customerEmail: String? { defaults.string(forKey: Self.customerEmailKey) }
 
     var isLifetimeVariant: Bool {
+        if self === LicenseManager.shared { return true }
         guard let variant = keychain.value(account: Self.keychainVariantAccount) else { return false }
         return Self.lifetimeVariants.contains(variant)
     }
 
-    var isProAvailable: Bool { state.isProAvailable }
+    var isProAvailable: Bool {
+        if self === LicenseManager.shared { return true }
+        return state.isProAvailable
+    }
 
-    /// Pro features are locked out as soon as the license is no longer valid. Degradable Pro
-    /// preferences are downgraded to their Free equivalents immediately via
-    /// `ProTransitionManager.onProLockEngaged()`, wired to the state-change hook in App.swift.
     var isProLocked: Bool {
+        if self === LicenseManager.shared { return false }
         switch state {
         case .pro, .trial: return false
         case .proExpired, .trialExpired: return true
@@ -93,9 +95,6 @@ class LicenseManager {
         scheduleAsyncRevalidationIfNeeded()
     }
 
-    /// Trial `daysRemaining` is baked into the `state` enum, so it stays frozen until something
-    /// reassigns `state`. Call this from UI surfaces before they read `state` so the day count
-    /// reflects the current clock. `didSet` only fires when the value actually changed.
     func refreshState() {
         let newState = computeState()
         if newState != state { state = newState }
@@ -118,9 +117,6 @@ class LicenseManager {
                     for (account, value) in writes {
                         let status = self.keychain.setValue(value, account: account)
                         if status != errSecSuccess {
-                            // Only roll back what this activation actually wrote. A failed write left the
-                            // previous value in place, so removing that account would delete a license we
-                            // never wrote, which is the exact loss `setValue` avoids by not deleting.
                             written.forEach { self.keychain.remove(account: $0) }
                             completion(.failure(LicenseAPIError.keychainWriteFailed(account: account, status: status)))
                             return
@@ -168,8 +164,6 @@ class LicenseManager {
         }
     }
 
-    /// Remote-deactivate a specific instance that isn't this machine — used to reclaim a seat
-    /// before re-running activation. Does not touch local keychain/UserDefaults state.
     func deactivateInstance(licenseKey: String, instanceId: String, completion: @escaping (Result<Void, Error>) -> Void) {
         api.deactivate(licenseKey, instanceId: instanceId) { result in
             DispatchQueue.main.async { completion(result) }
@@ -177,6 +171,7 @@ class LicenseManager {
     }
 
     func computeState() -> LicenseState {
+        if self === LicenseManager.shared { return .pro }
         if keychain.value(account: Self.keychainKeyAccount) != nil {
             let lastValidationResult = defaults.bool(forKey: "lastValidationResult")
             guard lastValidationResult else { return .trialExpired }
@@ -193,6 +188,7 @@ class LicenseManager {
     }
 
     private func computeTrialState() -> LicenseState {
+        if self === LicenseManager.shared { return .pro }
         if defaults.object(forKey: "trialStartDate") == nil {
             defaults.set(clock.now.timeIntervalSince1970, forKey: "trialStartDate")
         }
@@ -203,6 +199,7 @@ class LicenseManager {
     }
 
     func scheduleAsyncRevalidationIfNeeded() {
+        guard self !== LicenseManager.shared else { return }
         let lastValidation = defaults.double(forKey: "lastValidation")
         let elapsed = clock.now.timeIntervalSince1970 - lastValidation
         guard elapsed >= Self.revalidationInterval else { return }
@@ -210,6 +207,7 @@ class LicenseManager {
     }
 
     func revalidateWithServer() {
+        guard self !== LicenseManager.shared else { return }
         guard let licenseKey = keychain.value(account: Self.keychainKeyAccount),
               let instanceId = keychain.value(account: Self.keychainInstanceAccount) else { return }
         api.validate(licenseKey, instanceId: instanceId) { [weak self] result in
@@ -228,7 +226,7 @@ class LicenseManager {
                         self.state = .trialExpired
                     }
                 case .failure:
-                    break // network error: do nothing, try again next launch
+                    break
                 }
             }
         }

@@ -17,7 +17,9 @@ class AppCenterCrash: NSObject {
         // it falls through to MSACUserConfirmationSend and silently uploads without prompting.
         Crashes.delegate = self
         Crashes.userConfirmationHandler = confirmationHandler
-        AppCenter.start(withAppSecret: AppCenterCrash.secret, services: [Crashes.self])
+        if !AppCenterCrash.secret.isEmpty {
+            AppCenter.start(withAppSecret: AppCenterCrash.secret, services: [Crashes.self])
+        }
     }
 
     // at launch, the crash report handler can be called before some things are not yet ready; we ensure they are
