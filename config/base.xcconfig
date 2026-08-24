@@ -23,5 +23,6 @@ DEAD_CODE_STRIPPING = YES
 OTHER_LDFLAGS = $(inherited) -weak_framework ScreenCaptureKit -Wl,-U,_OBJC_CLASS_$_NSGlassEffectView -Wl,-U,_OBJC_CLASS_$_SCScreenshotConfiguration
 DOMAIN = alt-tab.app
 API_DOMAIN = alt-tab.app/api
-CURRENT_PROJECT_VERSION = 7.0.0
+CURRENT_PROJECT_VERSION = 11.5.0
+MARKETING_VERSION = 11.5.0
 APPCENTER_SECRET =
